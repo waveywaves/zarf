@@ -17,16 +17,22 @@ func TestConfigFile(t *testing.T) {
 	t.Log("E2E: Config file")
 
 	var (
-		path   = fmt.Sprintf("zarf-package-config-file-%s.tar.zst", e2e.Arch)
-		dir    = "examples/config-file"
-		config = "zarf-config.toml"
+		path       = fmt.Sprintf("zarf-package-config-file-%s.tar.zst", e2e.Arch)
+		dir        = "examples/config-file"
+		config     = "zarf-config.toml"
+		configPath = filepath.Join(dir, config)
 	)
+	// defer unsetting the ZARF_CONFIG so that we can test w/ the env var and w/ the flag both
+	defer os.Unsetenv("ZARF_CONFIG")
 
 	e2e.CleanFiles(path)
 
+	// Test the config file flag
+	os.Unsetenv("ZARF_CONFIG")
+	configFileTests(t, dir, path, "--config-path", configPath)
+
 	// Test the config file environment variable
 	t.Setenv("ZARF_CONFIG", filepath.Join(dir, config))
-	defer os.Unsetenv("ZARF_CONFIG")
 	configFileTests(t, dir, path)
 
 	configFileDefaultTests(t)
@@ -37,15 +43,22 @@ func TestConfigFile(t *testing.T) {
 	e2e.CleanFiles(path)
 }
 
-func configFileTests(t *testing.T, dir, path string) {
+func configFileTests(t *testing.T, dir, path string, extraArgs ...string) {
 	t.Helper()
 
+	var (
+		packageCreateArgs = []string{"package", "create", dir, "--confirm"}
+		packageDeployArgs = []string{"package", "deploy", path, "--confirm"}
+	)
+
+	args := append(packageCreateArgs, extraArgs...)
 	_, stdErr, err := e2e.Zarf(t, "package", "create", dir, "--confirm")
 	require.NoError(t, err)
 	require.Contains(t, string(stdErr), "This is a zebra and they have stripes")
 	require.Contains(t, string(stdErr), "This is a leopard and they have spots")
 
-	_, stdErr, err = e2e.Zarf(t, "package", "deploy", path, "--confirm")
+	args = append(packageDeployArgs, extraArgs...)
+	_, stdErr, err = e2e.Zarf(t, args...)
 	require.NoError(t, err)
 	require.Contains(t, string(stdErr), "📦 LION COMPONENT")
 	require.NotContains(t, string(stdErr), "📦 LEOPARD COMPONENT")
